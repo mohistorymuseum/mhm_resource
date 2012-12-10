@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * Implements hook_uninstall().
+ */
+function mhm_resource_uninstall() {
+  $variables = array(
+    'mhm_resource_node_types',
+    'mhm_resource_consumer_key',
+    'mhm_resource_consumer_secret',
+    'mhm_resource_oauth_url',
+    'mhm_resource_rest_url',
+  );
+
+  foreach($variables as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function mhm_resource_schema() {
+  $schema['mhm_resource'] = array(
+    'description' => 'Tracks relationship between local node and remote resource',
+    'fields' => array(
+      'nid' => array(
+        'description' => 'The nid of the node',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'resource_id' => array(
+        'description' => 'The remote resource_id',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'modified' => array(
+        'description' => 'Timestamp when resource was last updated',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+    ),
+    'unique keys' => array(
+      'nid' => array('nid', 'resource_id')
+    ),
+  );
+
+  return $schema;
+}

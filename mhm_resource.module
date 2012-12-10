@@ -1,0 +1,289 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function mhm_resource_menu() {
+  $items['admin/config/services/mhmresource'] = array(
+    'title' => 'MHM Resource',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mhm_resource_config_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'mhm_resource.admin.inc',
+  );
+
+  $items['mhmresource/test/%node'] = array(
+    'title' => 'test',
+    'page callback' => 'mhm_resource_test',
+    'page arguments' => array(2),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function mhm_resource_node_insert($node) {
+  if(in_array($node->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE) {
+    return;
+  }
+
+  $resource = mhm_resource_build_node_resource($node);
+  if($result = mhm_resource_rest($resource, 'POST')) {
+    mhm_resource_insert_resource_record($node->nid, $result->resource_id);
+  }
+
+
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function mhm_resource_node_update($node) {
+  if(in_array($node->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE) {
+    return;
+  }
+  
+  $resource = mhm_resource_build_node_resource($node);
+  if(empty($node->mhm_resource_id)) {
+    // Because node_insert doesn't give us a chance to let the node
+    // know that we have a resource, we check again here.
+    if($result = mhm_resource_rest($resource, 'POST')) {
+      $resource['resource_id'] = $result->resource_id;
+      mhm_resource_insert_resource_record($node->nid, $result->resource_id);
+    } else {
+      drupal_set_message('Resource ID was not found and we failed to create a new one.', 'error');
+      return;
+    }
+  }
+  mhm_resource_rest($resource, 'PUT');
+
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function mhm_resource_entity_delete($node, $type) {
+  switch($type) {
+    case 'node':
+      if(in_array($node->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE) {
+       return;
+      }
+      mhm_resource_rest($node->mhm_resource_id, 'DELETE');
+    break;
+  }
+}
+
+/**
+ * Implements hook_entity_load().
+ */
+function mhm_resource_entity_load($entities, $types) {
+  $resource_ids = mhm_resource_load_by_nid_multiple(array_keys($entities));
+  foreach($resource_ids as $resource_id => $row) {
+    $entities[$row->nid]->mhm_resource_id = $resource_id;
+  }
+}
+
+/**
+ * Implements hook_entity_view().
+ */
+function mhm_resource_entity_view($entity, $type, $view_mode, $langcode) {
+  switch($type) {
+    case 'node':
+      if(in_array($entity->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE) {
+        return;
+      }
+
+      if(!empty($entity->mhm_resource_id) && $view_mode == 'full') {
+        $entity->content['mhm_resource_id'] = array(
+          '#prefix' => '<div class="field field-name-field-mhm_resource_id field-label-inline clearfix"><div class="field-label">Resource ID:&nbsp;</div>',
+          '#markup' => l('http://collections.mohistory.org/resource/' . $entity->mhm_resource_id, 'http://collections.mohistory.org/resource/' . $entity->mhm_resource_id), // @todo set url in settings
+          '#suffix' => '</div>',
+        );
+      }
+      //dsm($node->content);
+    break; 
+  }
+}
+
+/**
+ * Returns the URL for a resource.
+ *
+ * @param (int) resource_id
+ *
+ * @return (string) url.
+ */
+function mhm_resource_resource_url($resource_id) {
+  return 'http://collections.mohistory.org/resource/' . $resource_id;
+}
+
+/**
+ * Loads the resource id for the given node
+ *
+ * @param (int) $nid The nid of the node.
+ *
+ * @return (int) The resource_id.
+ */
+function mhm_resource_load_by_nid($nid) {
+  if($result = mhm_resource_load_by_nid_multiple(array($nid))) {
+    return $result[0];
+  } else {
+    return FALSE;
+  }
+}
+
+/**
+ * Loads the resource id's for the given nodes.
+ *
+ * @param (array) $ids The nid's of the nodes.
+ *
+ * @return (int) The resource_id.
+ */
+function mhm_resource_load_by_nid_multiple($ids) {
+  $return = array();
+  $result = db_query('SELECT nid, resource_id FROM {mhm_resource} WHERE nid IN (:nid)', array(':nid' => $ids));
+  foreach($result as $row) {
+    $return[$row->resource_id] = $row;
+  }
+  return $return;
+}
+
+/**
+ * Builds a resource array for the given node.
+ *
+ * @param (object) $node The node object
+ *
+ * @return (array)
+ */
+function mhm_resource_build_node_resource($node) {
+  $data = array();
+
+  $node = entity_metadata_wrapper('node', $node);
+  $context = array(
+    'node' => clone $node,
+  );
+  drupal_alter(array('mhm_resource_node_resource_data', 'mhm_resource_node_' . $node->type->value() . '_resource_data'), $data, $context);
+
+  $resource = array(
+    'local_id' => $node->nid->value(),
+    'namespace_id' => variable_get('mhm_resource_namespace_id'),
+    'data' => $data,
+    'type_namespace_id' => $data['type_namespace_id'],
+  );
+
+  if(!empty($node->value()->mhm_resource_id)) {
+    $resource['resource_id'] = $node->value()->mhm_resource_id;
+  }
+
+  return $resource;
+}
+
+function mhm_resource_rest($resource, $method) {
+  if(($library = libraries_load('oauth-php')) && !empty($library['loaded'])) {
+    $consumer_key = variable_get('mhm_resource_consumer_key');
+    $consumer_secret = variable_get('mhm_resource_consumer_secret');
+    
+    $options = array(
+      'consumer_key' => $consumer_key,
+      'consumer_secret' => $consumer_secret,
+      'token' => FALSE,
+      'token_secret' => FALSE,
+    );
+    OAuthStore::instance('2Leg', $options);
+
+    $oauth_url = variable_get('mhm_resource_oauth_url');
+    try {
+      $request = new OAuthRequester($oauth_url . 'request_token', 'POST');
+      $result = $request->doRequest(0);
+      parse_str($result['body'], $params);
+
+      $curl_opt = array(
+        CURLOPT_HTTPHEADER => array('Content-type: application/json', 'Accept: application/json'),
+      );
+      $rest_url = variable_get('mhm_resource_rest_url');
+      switch($method) {
+        case 'POST':
+          $url = $rest_url . 'resource';
+        break;
+        case 'PUT':
+          $url = $rest_url . 'resource/' . $resource['resource_id'];
+        break;
+        case 'DELETE':
+          $url = $rest_url . 'resource/' . $resource['resource_id'];
+        break;
+      }
+      $request = new OAuthRequester($url, $method, $params, json_encode($resource));
+      $result = $request->doRequest(0, $curl_opt);
+      return json_decode($result['body']);
+      dsm($result);
+    } catch (OAuthException2 $e) {
+      drupal_set_message($e->getMessage());
+    }
+  } else {
+    dsm('no');
+  }
+
+}
+
+function mhm_resource_test($node) {
+  $resource = array(
+    'local_id' => $node->nid,
+    'namespace_id' => variable_get('mhm_resource_namespace_id'),
+  );
+
+  if($resource = mhm_resource_rest($resource, 'POST')) {
+    $record = array(
+      'nid' => $node->nid, 
+      'resource_id' => $resource->resource_id,
+      'modified' => time(),
+    );
+    drupal_write_record('mhm_resource', $record);
+  }
+
+
+  return t('done');
+}
+
+/**
+ * Inserts a node/resource record.
+ */
+function mhm_resource_insert_resource_record($nid, $resource_id) {
+    $record = array(
+      'nid' => $nid, 
+      'resource_id' => $resource_id,
+      'modified' => time(),
+    );
+    drupal_write_record('mhm_resource', $record);
+}
+
+/**
+ * Implements hook_assettoolbar_toolbar_buttons_info().
+ */
+function mhm_resource_assettoolbar_toolbar_buttons_info($node) {
+  $buttons = array();
+
+  $icon = array(
+    '#theme' => 'mhm_tb_gicon',
+    '#icon' => 'globe',
+    '#title' => t('Open MHM Resource'),
+  );
+
+  if(isset($node->mhm_resource_id)) {
+		$buttons['mhm_resource'] = array(
+			'#markup' => l(
+				drupal_render($icon), 
+				mhm_resource_resource_url($node->mhm_resource_id), 
+				array(
+					'html' => TRUE,
+          'attributes' => array(
+            'target' => '_blank',
+          ),
+				)
+			),
+		);
+	}
+
+  return $buttons;
+}

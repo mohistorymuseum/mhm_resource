@@ -1,0 +1,6 @@
+name = MHM Resource
+description = Interfaces with MHM Resource to manage coresponding resource records for assets
+core = 7.x
+package = Custom
+
+dependencies[] = libraries
