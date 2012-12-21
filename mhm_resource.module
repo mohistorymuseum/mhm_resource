@@ -111,12 +111,21 @@ function mhm_resource_entity_view($entity, $type, $view_mode, $langcode) {
 /**
  * Returns the URL for a resource.
  *
- * @param (int) resource_id
+ * @param (mixed) resource_id or array of ids
  *
  * @return (string) url.
  */
 function mhm_resource_resource_url($resource_id) {
-  return 'http://collections.mohistory.org/resource/' . $resource_id;
+  $prefix = 'http://collections.mohistory.org/resource/';
+  if(!is_array($resource_id)) {
+    return $prefix . $resource_id;
+  } else {
+    $resource_ids = array();
+    foreach($resource_id as $id) {
+      $resource_ids[$id] = $prefix . $id;
+    }
+    return $resource_ids;
+  };
 }
 
 /**
