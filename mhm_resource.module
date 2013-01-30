@@ -180,7 +180,7 @@ function mhm_resource_build_node_resource($node) {
   // to the Resource class how to deal with the presence of
   // this field.
   if(isset($node->value()->original) && $node->status->value() == 0 && $node->value()->original->status == 1) {
-    $data['disabled__i'] = time();
+    $data['disabled'] = date('c');
   }
 
   $resource = array(
