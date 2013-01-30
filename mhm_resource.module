@@ -175,6 +175,14 @@ function mhm_resource_build_node_resource($node) {
   );
   drupal_alter(array('mhm_resource_node_resource_data', 'mhm_resource_node_' . $node->type->value() . '_resource_data'), $data, $context);
 
+  // If the node has been updated to an unpublished status,
+  // We set the current time as the disabled field.  It's up
+  // to the Resource class how to deal with the presence of
+  // this field.
+  if(isset($node->value()->original) && $node->status->value() == 0 && $node->value()->original->status == 1) {
+    $data['disabled__i'] = time();
+  }
+
   $resource = array(
     'local_id' => $node->nid->value(),
     'namespace_id' => variable_get('mhm_resource_namespace_id'),
