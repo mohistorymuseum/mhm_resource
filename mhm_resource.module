@@ -68,7 +68,7 @@ function mhm_resource_node_update($node) {
 function mhm_resource_entity_delete($node, $type) {
   switch($type) {
     case 'node':
-      if(in_array($node->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE) {
+      if(in_array($node->type, array_filter(variable_get('mhm_resource_node_types', array()))) === FALSE || !isset($node->mhm_resource_id)) {
        return;
       }
       mhm_resource_rest($node->mhm_resource_id, 'DELETE');
@@ -205,17 +205,11 @@ function mhm_resource_rest($resource, $method) {
     $options = array(
       'consumer_key' => $consumer_key,
       'consumer_secret' => $consumer_secret,
-      'token' => FALSE,
-      'token_secret' => FALSE,
     );
     OAuthStore::instance('2Leg', $options);
 
     $oauth_url = variable_get('mhm_resource_oauth_url');
     try {
-      $request = new OAuthRequester($oauth_url . 'request_token', 'POST');
-      $result = $request->doRequest(0);
-      parse_str($result['body'], $params);
-
       $curl_opt = array(
         CURLOPT_HTTPHEADER => array('Content-type: application/json', 'Accept: application/json'),
       );
@@ -231,15 +225,14 @@ function mhm_resource_rest($resource, $method) {
           $url = $rest_url . 'resource/' . $resource['resource_id'];
         break;
       }
-      $request = new OAuthRequester($url, $method, $params, json_encode($resource));
+      $request = new OAuthRequester($url, $method, NULL, json_encode($resource));
       $result = $request->doRequest(0, $curl_opt);
       return json_decode($result['body']);
-      dsm($result);
     } catch (OAuthException2 $e) {
-      drupal_set_message($e->getMessage());
+      drupal_set_message($e->getMessage(), 'error');
     }
   } else {
-    dsm('no');
+    drupal_set_message(t('Oauth library not found!'), 'error');
   }
 
 }
