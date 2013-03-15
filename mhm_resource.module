@@ -54,7 +54,9 @@ function mhm_resource_node_update($node) {
       $resource['resource_id'] = $result->resource_id;
       mhm_resource_insert_resource_record($node->nid, $result->resource_id);
     } else {
-      drupal_set_message('Resource ID was not found and we failed to create a new one.', 'error');
+      $message = t('Resource ID was not found for nid @nid and we failed to create a new one.', array('@nid' => $node->nid));
+      drupal_set_message($message, 'error');
+      watchdog('mhm_resource', $message, array(), WATCHDOG_ERROR);
       return;
     }
   }
