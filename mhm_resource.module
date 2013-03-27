@@ -118,7 +118,7 @@ function mhm_resource_entity_view($entity, $type, $view_mode, $langcode) {
  * @return (string) url.
  */
 function mhm_resource_resource_url($resource_id) {
-  $prefix = 'http://collections.mohistory.org/resource/';
+  $prefix = variable_get('mhm_resource_url_prefix', 'http://collections.mohistory.org/resource/');
   if(!is_array($resource_id)) {
     return $prefix . $resource_id;
   } else {

@@ -4,6 +4,14 @@
  * Config form callback.
  */
 function mhm_resource_config_form($form, &$form_state) {
+  $form['mhm_resource_url_prefix'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Resource URL Prefix'),
+    '#description' => t('Prefix used to build the resource URL (ie http://collections.mohistory.org/resource/)'),
+    '#default_value' => variable_get('mhm_resource_url_prefix', ''),
+    '#required' => TRUE,
+  );
+
   $form['mhm_resource_node_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Resource Node Types'),
@@ -70,5 +78,10 @@ function mhm_resource_config_form_validate($form, &$form_state) {
   $rest_url = &$form_state['values']['mhm_resource_rest_url'];
   if(substr($rest_url, -1, 1) !== '/') {
     $rest_url .= '/';
+  }
+
+  $prefix = &$form_state['values']['mhm_resource_url_prefix'];
+  if(substr($prefix, -1, 1) !== '/') {
+    $prefix .= '/';
   }
 }
