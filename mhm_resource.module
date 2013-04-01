@@ -89,6 +89,27 @@ function mhm_resource_entity_load($entities, $types) {
 }
 
 /**
+ * Implements hook_field_extra_fields().
+ */
+function mhm_resource_field_extra_fields() {
+  $fields = array();
+  $types = array_filter(variable_get('mhm_resource_node_types', array()));
+  foreach($types as $type) {
+    $fields['node'][$type] = array(
+      'display' => array(
+         'mhm_resource_id' => array(
+          'label' => t('MHM Resource ID'),
+          'description' => t('MHM Resource ID.'),
+          'weight' => 0,
+        ),       
+      ),
+    );
+  }
+
+  return $fields;
+}
+
+/**
  * Implements hook_entity_view().
  */
 function mhm_resource_entity_view($entity, $type, $view_mode, $langcode) {
@@ -98,14 +119,19 @@ function mhm_resource_entity_view($entity, $type, $view_mode, $langcode) {
         return;
       }
 
-      if(!empty($entity->mhm_resource_id) && $view_mode == 'full') {
+      if(!empty($entity->mhm_resource_id)) {
+        $extra = field_info_extra_fields('node', $entity->type, 'display');
+        $display = $extra['mhm_resource_id']['display'][$view_mode];
         $entity->content['mhm_resource_id'] = array(
-          '#prefix' => '<div class="field field-name-field-mhm_resource_id field-label-inline clearfix"><div class="field-label">Resource ID:&nbsp;</div>',
-          '#markup' => l('http://collections.mohistory.org/resource/' . $entity->mhm_resource_id, 'http://collections.mohistory.org/resource/' . $entity->mhm_resource_id), // @todo set url in settings
-          '#suffix' => '</div>',
+          '#theme' => 'container',
+          '#attributes' => array(
+            'class' => array('mhm_resource_id'),
+          ),
+          '#markup' => t('<strong>@title</strong>: !value', array('@title' => $extra['mhm_resource_id']['label'], '!value' => l($entity->mhm_resource_id, variable_get('mhm_resource_url_prefix') . $entity->mhm_resource_id))),
+          '#weight' => $display['weight'],
+          '#access' => $display['visible'],
         );
       }
-      //dsm($node->content);
     break; 
   }
 }
